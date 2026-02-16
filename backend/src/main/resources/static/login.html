@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Risk Engine POC</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; max-width: 360px; margin: 4rem auto; padding: 0 1rem; }
+        h1 { font-size: 1.25rem; margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+        input { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 0.6rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+        button:hover { background: #1d4ed8; }
+        .error { color: #b91c1c; margin-top: 0.5rem; font-size: 0.875rem; }
+    </style>
+</head>
+<body>
+    <h1>Risk Engine POC – Login</h1>
+    <form id="loginForm">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" value="demo" required>
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" value="demo" required>
+        <button type="submit">Login</button>
+        <p id="error" class="error" aria-live="polite"></p>
+    </form>
+
+    <script>
+        // Use full URL when not on same origin (e.g. file:// or different port)
+        const API_BASE = (function () {
+            var o = window.location.origin;
+            if (o === 'http://localhost:8080' || o === 'http://127.0.0.1:8080') return '';
+            return 'http://localhost:8080';
+        })();
+        const form = document.getElementById('loginForm');
+        const errorEl = document.getElementById('error');
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            errorEl.textContent = '';
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch(API_BASE + '/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (!res.ok) throw new Error('Login failed: ' + res.status);
+                const data = await res.json();
+                sessionStorage.setItem('sessionId', data.sessionId);
+                sessionStorage.setItem('userId', data.userId);
+                window.location.href = 'dashboard.html';
+            } catch (err) {
+                var msg = err.message || 'Login failed.';
+                if (err.message === 'Failed to fetch') {
+                    msg = 'Cannot reach server. Is Spring Boot running on http://localhost:8080? Open this page from http://localhost:8080/login.html instead of file://.';
+                }
+                errorEl.textContent = msg;
+            }
+        });
+    </script>
+</body>
+</html>
