@@ -14,7 +14,13 @@ public class SignalRequest {
     private String sessionId;
     private String userId;
     private Boolean webdriverFlag;
-    /** Replaces legacy hiddenIframeCount; contains total, suspicious, hidden, offscreen, crossOrigin. */
+    /** Current page origin (e.g. http://localhost:8080). Used to flag if page URL is not from org. */
+    private String pageOrigin;
+    /** True if page hostname is not in the allowed org host list. */
+    private Boolean pageOriginNotFromOrg;
+    /** Referrer URL (document.referrer). Flagged when not from org for phishing/malware redirect detection. */
+    private String referrerUrl;
+    /** Contains total, suspicious, hidden, offscreen, crossOrigin, notFromOrg. */
     private IframeSignals iframeSignals;
     private Boolean fetchOverridden;
     private String userAgent;

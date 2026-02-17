@@ -3,16 +3,29 @@ package com.riskengine.service;
 import com.riskengine.dto.IframeSignals;
 import com.riskengine.dto.NormalizedSignals;
 import com.riskengine.dto.SignalRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Normalizes raw client signals for rule-based (and future ML) consumption.
- * Boolean → 0/1, iframe counts from iframeSignals, click interval &lt; 50ms → rapid-click flag.
+ * Boolean → 0/1, iframe counts from iframeSignals, page/iframe "not from org" flags, click interval → rapid-click.
  */
 @Service
+@RequiredArgsConstructor
 public class SignalNormalizationService {
 
     private static final double RAPID_CLICK_THRESHOLD_MS = 50.0;
+
+    @Value("${risk.engine.allowed-hosts:localhost,127.0.0.1}")
+    private String allowedHostsConfig;
+
+    private final ReferrerService referrerService;
 
     public NormalizedSignals normalize(SignalRequest request) {
         int webdriver = booleanToInt(request.getWebdriverFlag());
@@ -20,6 +33,9 @@ public class SignalNormalizationService {
         int iframeHidden = getIframeCount(request, IframeSignals::getHidden);
         int iframeOffscreen = getIframeCount(request, IframeSignals::getOffscreen);
         int iframeCrossOrigin = getIframeCount(request, IframeSignals::getCrossOrigin);
+        int iframeNotFromOrg = getIframeCount(request, IframeSignals::getNotFromOrg);
+        int pageOriginNotFromOrg = isPageOriginNotFromOrg(request);
+        int referrerNotFromOrg = referrerService.isSuspicious(request.getReferrerUrl()) ? 1 : 0;
         int rapidClicking = isRapidClicking(request.getClickIntervalAvg());
 
         return NormalizedSignals.builder()
@@ -28,8 +44,37 @@ public class SignalNormalizationService {
                 .iframeHidden(iframeHidden)
                 .iframeOffscreen(iframeOffscreen)
                 .iframeCrossOrigin(iframeCrossOrigin)
+                .iframeNotFromOrg(iframeNotFromOrg)
+                .pageOriginNotFromOrg(pageOriginNotFromOrg)
+                .referrerNotFromOrg(referrerNotFromOrg)
                 .rapidClicking(rapidClicking)
                 .build();
+    }
+
+    private int isPageOriginNotFromOrg(SignalRequest request) {
+        if (Boolean.TRUE.equals(request.getPageOriginNotFromOrg())) return 1;
+        String origin = request.getPageOrigin();
+        if (origin == null || origin.isBlank()) return 0;
+        String host = extractHostFromOrigin(origin);
+        if (host == null || host.isBlank()) return 0;
+        Set<String> allowed = Arrays.stream(allowedHostsConfig.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
+        return allowed.contains(host.toLowerCase()) ? 0 : 1;
+    }
+
+    private static String extractHostFromOrigin(String origin) {
+        if (origin == null) return null;
+        origin = origin.trim();
+        int i = origin.indexOf("://");
+        if (i >= 0) origin = origin.substring(i + 3);
+        int j = origin.indexOf(':');
+        if (j >= 0) origin = origin.substring(0, j);
+        int k = origin.indexOf('/');
+        if (k >= 0) origin = origin.substring(0, k);
+        return origin.isEmpty() ? null : origin;
     }
 
     private static int getIframeCount(SignalRequest request, java.util.function.ToIntFunction<IframeSignals> getter) {

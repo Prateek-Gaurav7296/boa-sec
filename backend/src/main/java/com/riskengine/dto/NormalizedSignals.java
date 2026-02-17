@@ -20,5 +20,8 @@ public class NormalizedSignals {
     private int iframeHidden;      // count for scoring
     private int iframeOffscreen;   // count for scoring
     private int iframeCrossOrigin; // count for scoring
+    private int iframeNotFromOrg;  // count of iframes whose URL host is not in org list
+    private int pageOriginNotFromOrg; // 0 or 1: page URL host not in org list
+    private int referrerNotFromOrg;   // 0 or 1: referrer URL host not in org list (phishing/malware redirect)
     private int rapidClicking;     // 0 or 1
 }

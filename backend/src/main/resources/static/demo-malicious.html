@@ -3,15 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Risk Engine POC</title>
+    <title>Demo: Suspicious iframes – Risk Engine POC</title>
     <style>
         * { box-sizing: border-box; }
-        body { font-family: system-ui, sans-serif; max-width: 560px; margin: 4rem auto; padding: 0 1rem; }
-        h1 { font-size: 1.25rem; margin-bottom: 1rem; }
-        button { padding: 0.6rem 1rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+        body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+        .demo-notice {
+            padding: 0.75rem 1rem;
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+        .demo-notice strong { display: block; margin-bottom: 0.25rem; }
+        button { padding: 0.6rem 1rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; margin-bottom: 1rem; }
         button:hover { background: #1d4ed8; }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
-        #result { margin-top: 1.5rem; padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; }
+        #result { margin-top: 1rem; padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; }
         #result h2 { font-size: 1rem; margin: 0 0 0.5rem 0; }
         #result p { margin: 0.25rem 0; font-size: 0.875rem; }
         .score { font-weight: 600; font-size: 1.25rem; }
@@ -19,15 +28,26 @@
         .decision-MFA { color: #d97706; }
         .decision-TERMINATE { color: #b91c1c; }
         .iframe-breakdown { margin-top: 0.5rem; padding: 0.5rem; background: #fff; border-radius: 4px; font-size: 0.8125rem; }
-        .security-alert { margin-top: 0.75rem; padding: 0.75rem; background: #fee2e2; border: 1px solid #dc2626; border-radius: 6px; color: #991b1b; font-weight: 600; font-size: 0.875rem; }
+        .security-alert {
+            margin-top: 1rem; padding: 1rem;
+            background: #fee2e2; border: 1px solid #dc2626; border-radius: 8px;
+            color: #991b1b; font-weight: 600; font-size: 0.9375rem;
+        }
         .security-alert.warning { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
+        .links { margin-top: 1.5rem; font-size: 0.875rem; }
+        .links a { margin-right: 1rem; }
     </style>
 </head>
 <body>
-    <h1>Risk Engine POC – Dashboard</h1>
-    <p>Session: <span id="sessionInfo">—</span> <a href="login.html">Logout</a></p>
-    <p><a href="demo-malicious.html">Demo: Page with suspicious iframes</a> – use this to test iframe detection and alerts.</p>
-    <button id="evaluateBtn">Evaluate Risk</button>
+    <h1>Demo: Page with suspicious iframes</h1>
+    <div class="demo-notice">
+        <strong>This page is for demonstration only.</strong>
+        It intentionally contains hidden and off-screen iframes to simulate clickjacking or injection. Use <strong>Evaluate Risk</strong> to see how the engine detects them and raises the risk score. You should see an alert when suspicious iframes are found.
+    </div>
+
+    <p>Session: <span id="sessionInfo">—</span> <a href="dashboard.html">Dashboard</a> | <a href="login.html">Logout</a></p>
+    <button id="evaluateBtn">Evaluate Risk on this page</button>
+
     <div id="result" hidden>
         <h2>Result</h2>
         <p>Risk score: <span id="riskScore" class="score">—</span></p>
@@ -37,6 +57,26 @@
         <div id="securityAlert" class="security-alert" hidden></div>
     </div>
     <p id="error" style="color: #b91c1c; margin-top: 0.5rem; font-size: 0.875rem;"></p>
+
+    <div class="links">
+        <a href="dashboard.html">← Back to Dashboard</a>
+    </div>
+
+    <!-- DEMO: Hidden iframes (simulate malicious injection / clickjacking) -->
+    <!-- 1. Display none -->
+    <iframe id="hidden-display" style="display: none;" title="Hidden (display:none)"></iframe>
+    <!-- 2. Visibility hidden -->
+    <iframe id="hidden-visibility" style="visibility: hidden; position: absolute; width: 1px; height: 1px;" title="Hidden (visibility:hidden)"></iframe>
+    <!-- 3. Opacity 0 -->
+    <iframe id="hidden-opacity" style="opacity: 0; position: absolute; width: 1px; height: 1px;" title="Hidden (opacity:0)"></iframe>
+    <!-- 4. Zero dimensions -->
+    <iframe id="hidden-zero-size" style="width: 0; height: 0; border: 0; position: absolute;" title="Zero size"></iframe>
+    <!-- 5. Off-screen (outside viewport) -->
+    <iframe id="offscreen-left" style="position: fixed; left: -9999px; top: 0; width: 100px; height: 100px;" title="Off-screen left"></iframe>
+    <!-- 6. Off-screen right -->
+    <iframe id="offscreen-right" style="position: fixed; left: 9999px; top: 0; width: 100px; height: 100px;" title="Off-screen right"></iframe>
+    <!-- 7. Cross-origin (different host) - use a common benign URL for demo -->
+    <iframe id="cross-origin" src="https://example.com" style="width: 1px; height: 1px; position: absolute; opacity: 0.01;" title="Cross-origin"></iframe>
 
     <script src="risk-agent.js"></script>
     <script>
@@ -68,7 +108,8 @@
             var crossOrigin = iframe.crossOrigin || 0;
             var notFromOrg = iframe.notFromOrg || 0;
             var pageNotFromOrg = !!data.pageOriginNotFromOrg;
-            if (iframeBreakdownEl && (total > 0 || suspicious > 0 || pageNotFromOrg || data.suspiciousReferrer || data.referrerUrl)) {
+
+            if (iframeBreakdownEl && (total > 0 || suspicious > 0 || pageNotFromOrg)) {
                 iframeBreakdownEl.hidden = false;
                 var parts = ['Iframes: total=' + total + ', suspicious=' + suspicious];
                 if (hidden) parts.push('hidden=' + hidden);
@@ -82,20 +123,21 @@
             } else if (iframeBreakdownEl && (data.suspiciousReferrer || data.referrerUrl)) {
                 iframeBreakdownEl.hidden = false;
                 iframeBreakdownEl.textContent = (data.suspiciousReferrer ? 'Suspicious referrer (not from org). ' : '') + (data.referrerUrl ? 'Referrer: ' + (data.referrerUrl.length > 50 ? data.referrerUrl.slice(0, 50) + '…' : data.referrerUrl) : '');
-            } else if (iframeBreakdownEl) { iframeBreakdownEl.hidden = true; }
+            }
+
             securityAlertEl.hidden = true;
             if (data.decision === 'TERMINATE') {
                 securityAlertEl.hidden = false;
                 securityAlertEl.className = 'security-alert';
                 securityAlertEl.textContent = 'Security alert: High risk. Session terminated.' + (pageNotFromOrg ? ' Page URL is not from the organization.' : '') + (notFromOrg ? ' ' + notFromOrg + ' iframe(s) from non-org URLs.' : '') + (data.suspiciousReferrer ? ' Referrer URL is not from the organization (possible phishing/malware redirect).' : '');
-            } else if (data.decision === 'MFA' || suspicious > 0 || pageNotFromOrg || data.suspiciousReferrer) {
+            } else if (data.decision === 'MFA' || suspicious > 0 || pageNotFromOrg || notFromOrg > 0 || data.suspiciousReferrer) {
                 securityAlertEl.hidden = false;
                 securityAlertEl.className = 'security-alert warning';
                 var msg = [];
                 if (data.suspiciousReferrer) msg.push('Suspicious referrer (possible phishing/malware redirect).');
                 if (pageNotFromOrg) msg.push('Page URL is not from the organization.');
                 if (notFromOrg) msg.push(notFromOrg + ' iframe(s) from non-org URLs.');
-                if (suspicious > 0) msg.push(suspicious + ' suspicious iframe(s) detected.');
+                if (suspicious > 0) msg.push(suspicious + ' suspicious iframe(s) (hidden, off-screen, cross-origin, or not from org).');
                 if (data.decision === 'MFA') msg.push('MFA required.');
                 securityAlertEl.textContent = 'Security alert: ' + (msg.join(' ') || ('Risk: ' + data.riskScore));
             }
@@ -104,8 +146,8 @@
         evaluateBtn.addEventListener('click', async function () {
             errorEl.textContent = '';
             resultDiv.hidden = true;
-            if (securityAlertEl) securityAlertEl.hidden = true;
-            if (iframeBreakdownEl) iframeBreakdownEl.hidden = true;
+            securityAlertEl.hidden = true;
+            iframeBreakdownEl.hidden = true;
             evaluateBtn.disabled = true;
             try {
                 var payload = window.RiskAgent ? window.RiskAgent.captureAndBuildPayload(sessionId, userId) : null;
@@ -121,7 +163,7 @@
                 var decisionEl = document.getElementById('decision');
                 decisionEl.textContent = data.decision;
                 decisionEl.className = 'decision-' + data.decision;
-                document.getElementById('deviceSignature').textContent = data.deviceSignature || '—';
+                document.getElementById('deviceSignature').textContent = (data.deviceSignature || '—').slice(0, 32) + '…';
                 resultDiv.hidden = false;
                 showAlert(data);
             } catch (err) {

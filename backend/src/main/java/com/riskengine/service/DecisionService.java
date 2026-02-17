@@ -52,6 +52,9 @@ public class DecisionService {
         m.put("sessionId", r.getSessionId());
         m.put("userId", r.getUserId());
         m.put("webdriverFlag", r.getWebdriverFlag());
+        m.put("pageOrigin", r.getPageOrigin());
+        m.put("pageOriginNotFromOrg", r.getPageOriginNotFromOrg());
+        m.put("referrerUrl", r.getReferrerUrl());
         if (r.getIframeSignals() != null) {
             Map<String, Object> iframe = new HashMap<>();
             iframe.put("total", r.getIframeSignals().getTotal());
@@ -59,6 +62,7 @@ public class DecisionService {
             iframe.put("hidden", r.getIframeSignals().getHidden());
             iframe.put("offscreen", r.getIframeSignals().getOffscreen());
             iframe.put("crossOrigin", r.getIframeSignals().getCrossOrigin());
+            iframe.put("notFromOrg", r.getIframeSignals().getNotFromOrg());
             m.put("iframeSignals", iframe);
         }
         m.put("fetchOverridden", r.getFetchOverridden());

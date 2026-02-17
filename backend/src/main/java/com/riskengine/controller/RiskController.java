@@ -3,6 +3,7 @@ package com.riskengine.controller;
 import com.riskengine.dto.RiskResponse;
 import com.riskengine.dto.SignalRequest;
 import com.riskengine.service.DecisionService;
+import com.riskengine.service.ReferrerService;
 import com.riskengine.service.RiskScoringService;
 import com.riskengine.service.SignalNormalizationService;
 import com.riskengine.service.SignatureService;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 @RestController
 @RequestMapping("/risk")
 @RequiredArgsConstructor
@@ -24,9 +27,16 @@ public class RiskController {
     private final SignatureService signatureService;
     private final RiskScoringService riskScoringService;
     private final DecisionService decisionService;
+    private final ReferrerService referrerService;
 
     @PostMapping("/evaluate")
-    public ResponseEntity<RiskResponse> evaluate(@RequestBody SignalRequest request) {
+    public ResponseEntity<RiskResponse> evaluate(@RequestBody SignalRequest request, HttpServletRequest httpRequest) {
+        if (request.getReferrerUrl() == null || request.getReferrerUrl().isBlank()) {
+            String headerReferrer = httpRequest.getHeader("Referer");
+            if (headerReferrer != null && !headerReferrer.isBlank()) {
+                request.setReferrerUrl(headerReferrer);
+            }
+        }
         log.atInfo().addKeyValue("event", "incoming_signals")
                 .addKeyValue("sessionId", request.getSessionId())
                 .addKeyValue("userId", request.getUserId())
@@ -45,11 +55,24 @@ public class RiskController {
                 .addKeyValue("decision", decision)
                 .log("Risk evaluation completed");
 
+        boolean suspiciousReferrer = referrerService.isSuspicious(request.getReferrerUrl());
+        if (suspiciousReferrer) {
+            log.atWarn().addKeyValue("event", "suspicious_referrer_at_risk_eval")
+                    .addKeyValue("referrerUrl", request.getReferrerUrl())
+                    .addKeyValue("sessionId", request.getSessionId())
+                    .log("Suspicious referrer – consider step-up, alerting, or manual research");
+        }
+
         RiskResponse response = RiskResponse.builder()
                 .riskScore(riskScore)
                 .decision(decision)
                 .deviceSignature(deviceSignature)
                 .sessionId(request.getSessionId())
+                .iframeSignals(request.getIframeSignals())
+                .pageOrigin(request.getPageOrigin())
+                .pageOriginNotFromOrg(request.getPageOriginNotFromOrg())
+                .referrerUrl(request.getReferrerUrl())
+                .suspiciousReferrer(suspiciousReferrer)
                 .build();
 
         return ResponseEntity.ok(response);

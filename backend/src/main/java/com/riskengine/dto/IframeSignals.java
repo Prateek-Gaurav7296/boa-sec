@@ -20,4 +20,6 @@ public class IframeSignals {
     private int hidden;
     private int offscreen;
     private int crossOrigin;
+    /** Count of iframes whose src host is not in the allowed org host list. */
+    private int notFromOrg;
 }

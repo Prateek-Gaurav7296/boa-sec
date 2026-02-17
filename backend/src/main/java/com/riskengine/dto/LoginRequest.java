@@ -13,4 +13,6 @@ public class LoginRequest {
 
     private String username;
     private String password;
+    /** Referrer URL (e.g. from document.referrer). Sent by client; used to detect phishing/malware redirects. */
+    private String referrerUrl;
 }

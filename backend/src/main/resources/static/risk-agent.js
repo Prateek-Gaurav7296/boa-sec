@@ -4,6 +4,11 @@
     var lastClickTime = 0;
     var MAX_CLICKS = 20;
 
+    /** Allowed organization hostnames (page and iframe URLs must be from these to avoid "not from org" flag). Override via window.RiskAgentOrgHosts if needed. */
+    var ORG_HOSTS = (typeof global !== 'undefined' && global.RiskAgentOrgHosts && Array.isArray(global.RiskAgentOrgHosts))
+        ? global.RiskAgentOrgHosts
+        : ['localhost', '127.0.0.1'];
+
     if (typeof document !== 'undefined') {
         document.addEventListener('click', function () {
             var now = Date.now();
@@ -20,7 +25,7 @@
      * cross-origin content, off-screen rendering, and zero-dimension frames.
      * Browser-native only; defensive checks throughout.
      *
-     * @returns { { totalIframes: number, suspiciousIframes: number, hiddenCount: number, offscreenCount: number, crossOriginCount: number } }
+     * @returns { { totalIframes: number, suspiciousIframes: number, hiddenCount: number, offscreenCount: number, crossOriginCount: number, notFromOrgCount: number } }
      */
     function detectSuspiciousIframes() {
         var result = {
@@ -28,7 +33,8 @@
             suspiciousIframes: 0,
             hiddenCount: 0,
             offscreenCount: 0,
-            crossOriginCount: 0
+            crossOriginCount: 0,
+            notFromOrgCount: 0
         };
         try {
             if (typeof document === 'undefined' || !document.getElementsByTagName) return result;
@@ -43,11 +49,21 @@
                 }
             } catch (e) { /* ignore */ }
 
+            function isHostFromOrg(host) {
+                if (!host) return false;
+                host = host.toLowerCase();
+                for (var k = 0; k < ORG_HOSTS.length; k++) {
+                    if (ORG_HOSTS[k] && host === ORG_HOSTS[k].toLowerCase()) return true;
+                }
+                return false;
+            }
+
             for (var i = 0; i < iframes.length; i++) {
                 var iframe = iframes[i];
                 var isHidden = false;
                 var isOffscreen = false;
                 var isCrossOrigin = false;
+                var isNotFromOrg = false;
 
                 try {
                     // --- A) Hidden iframe detection ---
@@ -95,7 +111,7 @@
                         }
                     } catch (e) { /* ignore */ }
 
-                    // --- C) Cross-origin iframe detection ---
+                    // --- C) Cross-origin and D) Not-from-org iframe detection ---
                     try {
                         if (iframe.src) {
                             var src = iframe.src;
@@ -114,13 +130,18 @@
                             if (iframeHost !== currentHost) {
                                 isCrossOrigin = true;
                             }
+                            // Iframe URL host is not in the allowed org list → flag as not from org
+                            if (iframeHost && !isHostFromOrg(iframeHost)) {
+                                isNotFromOrg = true;
+                            }
                         }
                     } catch (e) { /* iframe.src null or access error */ }
 
                     if (isHidden) result.hiddenCount++;
                     if (isOffscreen) result.offscreenCount++;
                     if (isCrossOrigin) result.crossOriginCount++;
-                    if (isHidden || isOffscreen || isCrossOrigin) result.suspiciousIframes++;
+                    if (isNotFromOrg) result.notFromOrgCount++;
+                    if (isHidden || isOffscreen || isCrossOrigin || isNotFromOrg) { result.suspiciousIframes++; }
                 } catch (e) {
                     /* per-iframe failure: skip, do not crash */
                 }
@@ -161,24 +182,49 @@
         return sum / clickTimestamps.length;
     }
 
+    /** Current page origin (e.g. https://app.mycompany.com:8080). Used to flag if page URL is not from org. */
+    function getPageOrigin() {
+        try {
+            if (typeof window === 'undefined' || !window.location) return '';
+            var loc = window.location;
+            return (loc.protocol || '') + '//' + (loc.hostname || '') + (loc.port ? ':' + loc.port : '');
+        } catch (e) { return ''; }
+    }
+
+    /** True if the current page's hostname is not in the allowed org host list (possible phishing / wrong site). */
+    function isPageOriginNotFromOrg() {
+        try {
+            if (typeof window === 'undefined' || !window.location || !window.location.hostname) return false;
+            var host = (window.location.hostname || '').toLowerCase();
+            for (var i = 0; i < ORG_HOSTS.length; i++) {
+                if (ORG_HOSTS[i] && host === ORG_HOSTS[i].toLowerCase()) return false;
+            }
+            return true;
+        } catch (e) { return false; }
+    }
+
     function capture() {
         var screenD = getScreen();
         var iframeSignals = detectSuspiciousIframes();
         return {
             webdriverFlag: getWebdriver(),
+            pageOrigin: getPageOrigin(),
+            pageOriginNotFromOrg: isPageOriginNotFromOrg(),
             iframeSignals: {
                 total: iframeSignals.totalIframes,
                 suspicious: iframeSignals.suspiciousIframes,
                 hidden: iframeSignals.hiddenCount,
                 offscreen: iframeSignals.offscreenCount,
-                crossOrigin: iframeSignals.crossOriginCount
+                crossOrigin: iframeSignals.crossOriginCount,
+                notFromOrg: iframeSignals.notFromOrgCount
             },
             fetchOverridden: getFetchOverridden(),
             userAgent: typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '',
             screenWidth: screenD.width,
             screenHeight: screenD.height,
             timezone: getTimezone(),
-            clickIntervalAvg: getClickIntervalAvg()
+            clickIntervalAvg: getClickIntervalAvg(),
+            referrerUrl: (typeof document !== 'undefined' && document.referrer) ? document.referrer : ''
         };
     }
     function buildPayload(sessionId, userId, signals) {
@@ -186,7 +232,10 @@
             sessionId: sessionId || '',
             userId: userId || '',
             webdriverFlag: signals.webdriverFlag,
-            iframeSignals: signals.iframeSignals || { total: 0, suspicious: 0, hidden: 0, offscreen: 0, crossOrigin: 0 },
+            pageOrigin: (signals && signals.pageOrigin) || getPageOrigin(),
+            pageOriginNotFromOrg: !!(signals && signals.pageOriginNotFromOrg),
+            referrerUrl: (signals && signals.referrerUrl) !== undefined ? signals.referrerUrl : ((typeof document !== 'undefined' && document.referrer) ? document.referrer : ''),
+            iframeSignals: signals.iframeSignals || { total: 0, suspicious: 0, hidden: 0, offscreen: 0, crossOrigin: 0, notFromOrg: 0 },
             fetchOverridden: signals.fetchOverridden,
             userAgent: signals.userAgent,
             screenWidth: signals.screenWidth,
