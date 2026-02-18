@@ -52,17 +52,21 @@ public class SignalNormalizationService {
     }
 
     private int isPageOriginNotFromOrg(SignalRequest request) {
-        if (Boolean.TRUE.equals(request.getPageOriginNotFromOrg())) return 1;
+        // Use backend allowed-hosts as source of truth when page origin is present
         String origin = request.getPageOrigin();
-        if (origin == null || origin.isBlank()) return 0;
-        String host = extractHostFromOrigin(origin);
-        if (host == null || host.isBlank()) return 0;
-        Set<String> allowed = Arrays.stream(allowedHostsConfig.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(String::toLowerCase)
-                .collect(Collectors.toSet());
-        return allowed.contains(host.toLowerCase()) ? 0 : 1;
+        if (origin != null && !origin.isBlank()) {
+            String host = extractHostFromOrigin(origin);
+            if (host != null && !host.isBlank()) {
+                Set<String> allowed = Arrays.stream(allowedHostsConfig.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .map(String::toLowerCase)
+                        .collect(Collectors.toSet());
+                return allowed.contains(host.toLowerCase()) ? 0 : 1;
+            }
+        }
+        // Fallback to client-reported flag when origin is missing
+        return Boolean.TRUE.equals(request.getPageOriginNotFromOrg()) ? 1 : 0;
     }
 
     private static String extractHostFromOrigin(String origin) {
