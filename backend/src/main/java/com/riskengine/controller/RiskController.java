@@ -4,6 +4,7 @@ import com.riskengine.dto.RiskResponse;
 import com.riskengine.dto.SignalRequest;
 import com.riskengine.service.DecisionService;
 import com.riskengine.service.ReferrerService;
+import com.riskengine.service.RiskCollectMapper;
 import com.riskengine.service.RiskScoringService;
 import com.riskengine.service.SignalNormalizationService;
 import com.riskengine.service.SignatureService;
@@ -28,6 +29,60 @@ public class RiskController {
     private final RiskScoringService riskScoringService;
     private final DecisionService decisionService;
     private final ReferrerService referrerService;
+    private final RiskCollectMapper riskCollectMapper;
+
+    @PostMapping("/collect")
+    public ResponseEntity<RiskResponse> collect(@RequestBody java.util.Map<String, Object> request, HttpServletRequest httpRequest) {
+        SignalRequest signalRequest = riskCollectMapper.toSignalRequest(request);
+        if (signalRequest == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (signalRequest.getReferrerUrl() == null || signalRequest.getReferrerUrl().isBlank()) {
+            String headerReferrer = httpRequest.getHeader("Referer");
+            if (headerReferrer != null && !headerReferrer.isBlank()) {
+                signalRequest.setReferrerUrl(headerReferrer);
+            }
+        }
+        log.atInfo().addKeyValue("event", "risk_collect")
+                .addKeyValue("sessionId", signalRequest.getSessionId())
+                .addKeyValue("userId", signalRequest.getUserId())
+                .log("Incoming risk collect request");
+
+        decisionService.persistRawSignals(signalRequest);
+        var normalized = signalNormalizationService.normalize(signalRequest);
+        String deviceSignature = signatureService.generate(signalRequest);
+        int riskScore = riskScoringService.score(normalized);
+        String decision = decisionService.decide(riskScore);
+        decisionService.persistDecision(signalRequest.getSessionId(), signalRequest.getUserId(), riskScore, decision);
+
+        log.atInfo().addKeyValue("event", "risk_evaluated")
+                .addKeyValue("sessionId", signalRequest.getSessionId())
+                .addKeyValue("riskScore", riskScore)
+                .addKeyValue("decision", decision)
+                .log("Risk evaluation completed");
+
+        boolean suspiciousReferrer = referrerService.isSuspicious(signalRequest.getReferrerUrl());
+        if (suspiciousReferrer) {
+            log.atWarn().addKeyValue("event", "suspicious_referrer_at_risk_eval")
+                    .addKeyValue("referrerUrl", signalRequest.getReferrerUrl())
+                    .addKeyValue("sessionId", signalRequest.getSessionId())
+                    .log("Suspicious referrer – consider step-up, alerting, or manual research");
+        }
+
+        RiskResponse response = RiskResponse.builder()
+                .riskScore(riskScore)
+                .decision(decision)
+                .deviceSignature(deviceSignature)
+                .sessionId(signalRequest.getSessionId())
+                .iframeSignals(signalRequest.getIframeSignals())
+                .pageOrigin(signalRequest.getPageOrigin())
+                .pageOriginNotFromOrg(signalRequest.getPageOriginNotFromOrg())
+                .referrerUrl(signalRequest.getReferrerUrl())
+                .suspiciousReferrer(suspiciousReferrer)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
 
     @PostMapping("/evaluate")
     public ResponseEntity<RiskResponse> evaluate(@RequestBody SignalRequest request, HttpServletRequest httpRequest) {

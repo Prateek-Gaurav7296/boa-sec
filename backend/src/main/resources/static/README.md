@@ -4,10 +4,11 @@ Place your frontend files here so Spring Boot serves them at the same origin as 
 
 ## Required files
 
+- `/config/risk-agent-config.js` – served by backend from `risk.engine.allowed-hosts`; sets `window.RiskAgentOrgHosts`. Include **before** `risk-agent.js` on any page that evaluates risk (e.g. dashboard, demo-malicious).
 - `login.html` – login form, POST to `/login`, then redirect to `dashboard.html`
-- `dashboard.html` – “Evaluate Risk” button, POST to `/risk/evaluate`, show result and iframe/risk alerts
-- `demo-malicious.html` – demo page with intentional hidden/off-screen/cross-origin iframes; use to test iframe detection and security alerts
-- `risk-agent.js` – signal capture; expose `window.RiskAgent.captureAndBuildPayload(sessionId, userId)` and `detectSuspiciousIframes()`
+- `dashboard.html` – “Evaluate Risk” button, POST to `/risk/collect`, show result and risk alerts
+- `demo-malicious.html` – demo page with intentional hidden/off-screen/cross-origin iframes; use to test risk evaluation flow
+- `risk-agent.js` – browser fingerprint signal collector; 3-stage collection; auto-sends on load; expose `window.RiskAgent.captureAndBuildPayload(sessionId, userId)` for explicit evaluation
 
 ## API compatibility
 
@@ -16,11 +17,11 @@ When served by Spring Boot (same origin), use **relative URLs** so no CORS is ne
 ```javascript
 const API_BASE = '';   // same origin
 fetch(API_BASE + '/login', { ... });
-fetch(API_BASE + '/risk/evaluate', { ... });
+fetch(API_BASE + '/risk/collect', { ... });
 ```
 
 - **POST /login** – body: `{ "username", "password", "referrerUrl" }` (referrerUrl optional; backend also uses HTTP `Referer` header if body is empty) → returns `{ "sessionId", "userId", "suspiciousReferrer" }`
-- **POST /risk/evaluate** – body: `SignalRequest` (includes `referrerUrl`; backend falls back to `Referer` header if empty) → returns `RiskResponse` including `referrerUrl`, `suspiciousReferrer`, iframe breakdown, etc.
+- **POST /risk/collect** – body: `RiskCollectRequest` (timestamp, sessionId, userId, stage1, stage2, stage3); returns `RiskResponse` including `riskScore`, `decision`, `deviceSignature`, `referrerUrl`, `suspiciousReferrer`, etc.
 
 ## Referrer monitoring (phishing/malware redirects)
 

@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Iframe detection signals from the client (risk-agent.js detectSuspiciousIframes).
+ * Iframe detection signals from the client (legacy SignalRequest) or default zeros when using RiskCollectRequest.
  * Used for clickjacking / hidden injection / cross-origin risk scoring.
  */
 @Data

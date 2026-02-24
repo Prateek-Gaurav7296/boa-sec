@@ -76,33 +76,31 @@ Configure in `backend/src/main/resources/application.properties`:
 | Method | Path            | Description |
 |--------|-----------------|-------------|
 | POST   | `/login`        | Mock login; body `{ "username", "password" }`; returns `{ "sessionId", "userId" }`. |
-| POST   | `/risk/evaluate` | Evaluate risk; body `SignalRequest`; returns `RiskResponse`. |
+| POST   | `/risk/collect` | Collect signals and evaluate risk; body `RiskCollectRequest` (3-stage fingerprint payload); returns `RiskResponse`. |
+| POST   | `/risk/evaluate` | Legacy; body `SignalRequest`; returns `RiskResponse`. |
 
-### SignalRequest (POST /risk/evaluate)
+### RiskCollectRequest (POST /risk/collect)
 
-- `sessionId`, `userId` (string)
-- `webdriverFlag` (boolean)
-- `hiddenIframeCount` (int)
-- `fetchOverridden` (boolean)
-- `userAgent` (string)
-- `screenWidth`, `screenHeight` (int)
-- `timezone` (string)
-- `clickIntervalAvg` (double, ms)
+- `timestamp`, `sessionId`, `userId`
+- `stage1`: userAgent, platform, language, screen, referrer, origin, webdriver, etc.
+- `stage2`: canvasHash, webglHash, audioHash, fontsHash (SHA-256)
+- `stage3`: automation, functionTampered, iframeMismatch, storageWorks, cspRestricted
 
 ### RiskResponse
 
 - `riskScore` (int), `decision` ("ALLOW" | "MFA" | "TERMINATE")
 - `deviceSignature` (string), `sessionId` (string)
 
-### Flow for `/risk/evaluate`
+### Flow for `/risk/collect`
 
-1. Store raw signals in `raw_signals`
-2. Normalize signals (booleans → 0/1, counts capped at 5, click interval &lt; 50ms → rapid-click)
-3. Generate device signature: SHA-256(userAgent + screenWidth + screenHeight + timezone)
-4. Rule-based risk score (weights: webdriver 30, fetchOverridden 40, hiddenIframe 10 each max 50, rapidClicking 20; cap 100)
-5. Decision: &lt; 30 ALLOW, 30–69 MFA, ≥ 70 TERMINATE
-6. Persist row in `risk_decisions`
-7. Return `RiskResponse`
+1. Map `RiskCollectRequest` → `SignalRequest` (stage1/stage2/stage3 → legacy format)
+2. Store raw signals in `raw_signals`
+3. Normalize signals (booleans → 0/1, counts capped at 5, click interval &lt; 50ms → rapid-click)
+4. Generate device signature: SHA-256(userAgent + screenWidth + screenHeight + timezone)
+5. Rule-based risk score (weights: webdriver 30, fetchOverridden 40, hiddenIframe 10 each max 50, rapidClicking 20; cap 100)
+6. Decision: &lt; 30 ALLOW, 30–69 MFA, ≥ 70 TERMINATE
+7. Persist row in `risk_decisions`
+8. Return `RiskResponse`
 
 ### Logging
 

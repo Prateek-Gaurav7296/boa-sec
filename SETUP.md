@@ -182,7 +182,7 @@ Below is what each folder and important file is for. You do not need to change m
 | `config/WebConfig.java` | Java | Configures CORS (so the browser can call the API from different origins) and redirects the root URL `/` to the login page. |
 | **controller/** | Folder | REST API endpoints. |
 | `controller/AuthController.java` | Java | Handles **POST /login**. Accepts username/password (mock), returns a session ID and user ID. No real authentication. |
-| `controller/RiskController.java` | Java | Handles **POST /risk/evaluate**. Receives browser signals, runs the risk pipeline (normalize → signature → score → decision), saves to DB, returns risk score and decision. |
+| `controller/RiskController.java` | Java | Handles **POST /risk/collect** and **POST /risk/evaluate**. Receives browser signals (RiskCollectRequest or SignalRequest), runs the risk pipeline (normalize → signature → score → decision), saves to DB, returns risk score and decision. |
 | **dto/** | Folder | Data Transfer Objects: the shapes of JSON requests and responses. |
 | `dto/LoginRequest.java` | Java | Request body for login: `username`, `password`. |
 | `dto/LoginResponse.java` | Java | Response from login: `sessionId`, `userId`. |
@@ -222,8 +222,8 @@ Below is what each folder and important file is for. You do not need to change m
 |------|------|---------|
 | `index.html` | HTML | Redirects to the login page. Opening `http://localhost:8080/` lands here, then redirects to `login.html`. |
 | `login.html` | HTML | Login page: username and password fields, “Login” button. On submit, calls **POST /login**, stores `sessionId` and `userId` in the browser, then redirects to the dashboard. |
-| `dashboard.html` | HTML | After login: shows session info, “Evaluate Risk” button, and area for risk result (score, decision, device signature). Calls **POST /risk/evaluate** with data from `risk-agent.js`. |
-| `risk-agent.js` | JavaScript | Collects browser signals (e.g. webdriver flag, iframe counts, fetch override, userAgent, screen size, timezone, click timing) and builds the payload for **POST /risk/evaluate**. Exposes `RiskAgent.detectSuspiciousIframes()` and `RiskAgent.captureAndBuildPayload(sessionId, userId)`. |
+| `dashboard.html` | HTML | After login: shows session info, “Evaluate Risk” button, and area for risk result (score, decision, device signature). Calls **POST /risk/collect** with data from `risk-agent.js`. |
+| `risk-agent.js` | JavaScript | 3-stage browser fingerprint collector (fast signals, canvas/WebGL/audio/fonts hashes, anti-tampering). Auto-sends on load; exposes `RiskAgent.captureAndBuildPayload(sessionId, userId)` for **POST /risk/collect**. |
 | `README.md` | Doc | Short note on placing frontend files and using the API when served from Spring Boot. |
 
 ---
@@ -430,7 +430,7 @@ psql -U postgres -d risk_engine -c "\dt"
   - **Decision** (ALLOW, MFA, or TERMINATE),
   - **Device signature** (a long hex string).
 
-**If it fails:** Check the browser console and network tab (F12 → Network) for failed requests to `/risk/evaluate`. Ensure the backend is still running and that there are no errors in the server console.
+**If it fails:** Check the browser console and network tab (F12 → Network) for failed requests to `/risk/collect`. Ensure the backend is still running and that there are no errors in the server console.
 
 ---
 
@@ -479,7 +479,7 @@ curl -X POST http://localhost:8080/login -H "Content-Type: application/json" -d 
 | **“Failed to configure a DataSource” / “Connection refused”** | PostgreSQL is not running, or URL/username/password in `application.properties` is wrong. Verify with `psql` or pgAdmin that you can connect to the same host, port, database, and user. |
 | **“Port 8080 already in use”** | Another program is using 8080. Stop it or change `server.port` in `application.properties` (e.g. to 8081) and use `http://localhost:8081` in the browser. |
 | **“Failed to fetch” on login or Evaluate Risk** | You are likely opening the page from disk (`file://`). Always use **http://localhost:8080/login.html** (or the port you set). |
-| **Login works but Evaluate Risk shows an error** | Open browser DevTools (F12) → Console and Network. Check the `/risk/evaluate` request (status code and response body). Check server logs for exceptions. |
+| **Login works but Evaluate Risk shows an error** | Open browser DevTools (F12) → Console and Network. Check the `/risk/collect` request (status code and response body). Check server logs for exceptions. |
 | **Tables not created** | Ensure `spring.jpa.hibernate.ddl-auto=update` is in `application.properties` and the app has started at least once without DB connection errors. If you use `validate`, create tables manually from `schema.sql`. |
 | **Java version error / “release version 21 not supported”** | The project requires **Java 21**. Run `java -version` and `javac -version`; if they show 17 or 11, install Java 21 and set `JAVA_HOME` (see [Section 1](#1-environment--version-requirements)). |
 | **Maven/Wrapper errors** | From the **backend** folder run `./mvnw spring-boot:run` (or `mvnw.cmd` on Windows). If that fails, install Maven 3.6+ and run `mvn spring-boot:run`. Ensure Maven is using Java 21 (`mvn -version`). |
@@ -493,7 +493,7 @@ curl -X POST http://localhost:8080/login -H "Content-Type: application/json" -d 
 - **Tables:** `raw_signals`, `risk_decisions` (created by the app if `ddl-auto=update`).
 - **Run app:** From `backend/`: `./mvnw spring-boot:run` or run `RiskEngineApplication` in IDE.
 - **Open in browser:** http://localhost:8080/ or http://localhost:8080/login.html
-- **API:** POST `/login` (username, password) and POST `/risk/evaluate` (signals). See README for full API details.
+- **API:** POST `/login` (username, password) and POST `/risk/collect` (signals). See README for full API details.
 
 ---
 

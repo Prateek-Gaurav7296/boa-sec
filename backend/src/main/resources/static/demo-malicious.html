@@ -151,9 +151,9 @@
             iframeBreakdownEl.hidden = true;
             evaluateBtn.disabled = true;
             try {
-                var payload = window.RiskAgent ? window.RiskAgent.captureAndBuildPayload(sessionId, userId) : null;
+                var payload = window.RiskAgent ? await window.RiskAgent.captureAndBuildPayload(sessionId, userId) : null;
                 if (!payload) { throw new Error('RiskAgent not loaded.'); }
-                var res = await fetch(API_BASE + '/risk/evaluate', {
+                var res = await fetch(API_BASE + '/risk/collect', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)

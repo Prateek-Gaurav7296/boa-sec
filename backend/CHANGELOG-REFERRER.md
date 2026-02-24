@@ -32,7 +32,7 @@ When a user is redirected to the bank login from a malicious source (phishing/ma
   - Logs suspicious referrer at info level.
 
 - **`RiskController`**
-  - `POST /risk/evaluate`: if `SignalRequest.referrerUrl` is null/blank, sets it from HTTP `Referer` header.
+  - `POST /risk/collect` and `POST /risk/evaluate`: if referrer is null/blank, sets it from HTTP `Referer` header.
   - Response already includes `referrerUrl` and `suspiciousReferrer` (from existing risk pipeline).
 
 - **`SignalRequest`** (DTO)  
@@ -67,7 +67,7 @@ When a user is redirected to the bank login from a malicious source (phishing/ma
   - If response has `suspiciousReferrer: true`, shows a security notice and “Continue to dashboard” (no auto-redirect).
 
 - **`risk-agent.js`**
-  - Includes `referrerUrl: document.referrer` in the payload built for `POST /risk/evaluate`.
+  - Includes `referrerUrl: document.referrer` in the payload (stage1.referrer) built for `POST /risk/collect`.
 
 - **`dashboard.html`**
   - Shows referrer in the risk breakdown (referrer URL and “Suspicious referrer” alert when applicable).
@@ -82,10 +82,12 @@ When a user is redirected to the bank login from a malicious source (phishing/ma
   - Backend may use `Referer` header if `referrerUrl` is empty.  
   - Response: `{ "sessionId", "userId", "suspiciousReferrer" }`.
 
-- **POST /risk/evaluate**  
-  - Body: `SignalRequest` including `referrerUrl` (optional).  
-  - Backend may use `Referer` header if `referrerUrl` is empty.  
+- **POST /risk/collect** (primary)  
+  - Body: `RiskCollectRequest` (stage1.referrer or backend uses `Referer` header if empty).  
   - Response: `RiskResponse` includes `referrerUrl`, `suspiciousReferrer`, and rest of risk breakdown.
+
+- **POST /risk/evaluate** (legacy)  
+  - Body: `SignalRequest` including `referrerUrl` (optional). Same referrer logic applies.
 
 ---
 
