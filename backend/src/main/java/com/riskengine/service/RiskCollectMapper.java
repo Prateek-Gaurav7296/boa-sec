@@ -46,11 +46,31 @@ public class RiskCollectMapper {
             }
         }
 
+        Boolean functionTampered = null;
+        Boolean iframeMismatch = null;
+        Boolean storageBlocked = null;
+        Boolean cspRestricted = null;
+        Integer pluginsLength = null;
+        Integer mimeTypesLength = null;
+        Boolean hasChrome = null;
+        Boolean hasWebdriverScriptFn = null;
+
         Map<String, Object> stage3 = (Map<String, Object>) payload.get("stage3");
         if (stage3 != null) {
+            functionTampered = getBoolean(stage3, "functionTampered");
+            iframeMismatch = getBoolean(stage3, "iframeMismatch");
+            Boolean storageWorks = getBoolean(stage3, "storageWorks");
+            storageBlocked = storageWorks != null && !storageWorks;
+            cspRestricted = getBoolean(stage3, "cspRestricted");
             Map<String, Object> automation = (Map<String, Object>) stage3.get("automation");
-            if (automation != null && Boolean.TRUE.equals(automation.get("webdriver"))) {
-                webdriverFlag = Boolean.TRUE;
+            if (automation != null) {
+                if (Boolean.TRUE.equals(automation.get("webdriver"))) {
+                    webdriverFlag = Boolean.TRUE;
+                }
+                pluginsLength = getInt(automation, "pluginsLength");
+                mimeTypesLength = getInt(automation, "mimeTypesLength");
+                hasChrome = getBoolean(automation, "hasChrome");
+                hasWebdriverScriptFn = getBoolean(automation, "hasWebdriverScriptFn");
             }
         }
 
@@ -66,14 +86,7 @@ public class RiskCollectMapper {
             }
         }
 
-        IframeSignals iframeSignals = IframeSignals.builder()
-                .total(0)
-                .suspicious(0)
-                .hidden(0)
-                .offscreen(0)
-                .crossOrigin(0)
-                .notFromOrg(0)
-                .build();
+        IframeSignals iframeSignals = parseIframeSignals(payload);
 
         return SignalRequest.builder()
                 .sessionId(sessionId)
@@ -89,12 +102,32 @@ public class RiskCollectMapper {
                 .screenHeight(screenHeight)
                 .timezone(timezone)
                 .clickIntervalAvg(null)
+                .functionTampered(functionTampered)
+                .iframeMismatch(iframeMismatch)
+                .storageBlocked(storageBlocked)
+                .cspRestricted(cspRestricted)
+                .pluginsLength(pluginsLength)
+                .mimeTypesLength(mimeTypesLength)
+                .hasChrome(hasChrome)
+                .hasWebdriverScriptFn(hasWebdriverScriptFn)
                 .build();
     }
 
     private static String getString(Map<String, Object> m, String key) {
         Object v = m.get(key);
         return v != null ? String.valueOf(v) : null;
+    }
+
+    private static Boolean getBoolean(Map<String, Object> m, String key) {
+        Object v = m.get(key);
+        if (v == null) return null;
+        if (v instanceof Boolean) return (Boolean) v;
+        if (v instanceof String) return Boolean.parseBoolean((String) v);
+        return null;
+    }
+
+    private static int nullToZero(Integer v) {
+        return v != null ? v : 0;
     }
 
     private static Integer getInt(Map<String, Object> m, String key) {
@@ -106,6 +139,30 @@ public class RiskCollectMapper {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private static IframeSignals parseIframeSignals(Map<String, Object> payload) {
+        Object ifs = payload.get("iframeSignals");
+        if (ifs instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) ifs;
+            return IframeSignals.builder()
+                    .total(nullToZero(getInt(m, "total")))
+                    .suspicious(nullToZero(getInt(m, "suspicious")))
+                    .hidden(nullToZero(getInt(m, "hidden")))
+                    .offscreen(nullToZero(getInt(m, "offscreen")))
+                    .crossOrigin(nullToZero(getInt(m, "crossOrigin")))
+                    .notFromOrg(nullToZero(getInt(m, "notFromOrg")))
+                    .build();
+        }
+        return IframeSignals.builder()
+                .total(0)
+                .suspicious(0)
+                .hidden(0)
+                .offscreen(0)
+                .crossOrigin(0)
+                .notFromOrg(0)
+                .build();
     }
 
     private static String extractHostFromOrigin(String origin) {

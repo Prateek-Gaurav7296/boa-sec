@@ -5,8 +5,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "risk_decisions")
@@ -31,6 +35,10 @@ public class RiskDecisionLog {
 
     @Column(name = "decision", length = 20, nullable = false)
     private String decision;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "flagged_issues", columnDefinition = "jsonb")
+    private List<Map<String, Object>> flaggedIssues;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

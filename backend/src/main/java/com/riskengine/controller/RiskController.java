@@ -3,6 +3,7 @@ package com.riskengine.controller;
 import com.riskengine.dto.RiskResponse;
 import com.riskengine.dto.SignalRequest;
 import com.riskengine.service.DecisionService;
+import com.riskengine.service.IssueDetectionService;
 import com.riskengine.service.ReferrerService;
 import com.riskengine.service.RiskCollectMapper;
 import com.riskengine.service.RiskScoringService;
@@ -30,6 +31,7 @@ public class RiskController {
     private final DecisionService decisionService;
     private final ReferrerService referrerService;
     private final RiskCollectMapper riskCollectMapper;
+    private final IssueDetectionService issueDetectionService;
 
     @PostMapping("/collect")
     public ResponseEntity<RiskResponse> collect(@RequestBody java.util.Map<String, Object> request, HttpServletRequest httpRequest) {
@@ -48,17 +50,19 @@ public class RiskController {
                 .addKeyValue("userId", signalRequest.getUserId())
                 .log("Incoming risk collect request");
 
-        decisionService.persistRawSignals(signalRequest);
+        decisionService.persistRawSignals(signalRequest, request);
         var normalized = signalNormalizationService.normalize(signalRequest);
         String deviceSignature = signatureService.generate(signalRequest);
         int riskScore = riskScoringService.score(normalized);
         String decision = decisionService.decide(riskScore);
-        decisionService.persistDecision(signalRequest.getSessionId(), signalRequest.getUserId(), riskScore, decision);
+        var flaggedIssues = issueDetectionService.detectIssues(normalized, signalRequest);
+        decisionService.persistDecision(signalRequest.getSessionId(), signalRequest.getUserId(), riskScore, decision, flaggedIssues);
 
         log.atInfo().addKeyValue("event", "risk_evaluated")
                 .addKeyValue("sessionId", signalRequest.getSessionId())
                 .addKeyValue("riskScore", riskScore)
                 .addKeyValue("decision", decision)
+                .addKeyValue("flaggedCount", flaggedIssues.size())
                 .log("Risk evaluation completed");
 
         boolean suspiciousReferrer = referrerService.isSuspicious(signalRequest.getReferrerUrl());
@@ -79,6 +83,7 @@ public class RiskController {
                 .pageOriginNotFromOrg(signalRequest.getPageOriginNotFromOrg())
                 .referrerUrl(signalRequest.getReferrerUrl())
                 .suspiciousReferrer(suspiciousReferrer)
+                .flaggedIssues(flaggedIssues)
                 .build();
 
         return ResponseEntity.ok(response);
@@ -97,17 +102,19 @@ public class RiskController {
                 .addKeyValue("userId", request.getUserId())
                 .log("Incoming risk evaluation request");
 
-        decisionService.persistRawSignals(request);
+        decisionService.persistRawSignals(request, null);
         var normalized = signalNormalizationService.normalize(request);
         String deviceSignature = signatureService.generate(request);
         int riskScore = riskScoringService.score(normalized);
         String decision = decisionService.decide(riskScore);
-        decisionService.persistDecision(request.getSessionId(), request.getUserId(), riskScore, decision);
+        var flaggedIssues = issueDetectionService.detectIssues(normalized, request);
+        decisionService.persistDecision(request.getSessionId(), request.getUserId(), riskScore, decision, flaggedIssues);
 
         log.atInfo().addKeyValue("event", "risk_evaluated")
                 .addKeyValue("sessionId", request.getSessionId())
                 .addKeyValue("riskScore", riskScore)
                 .addKeyValue("decision", decision)
+                .addKeyValue("flaggedCount", flaggedIssues.size())
                 .log("Risk evaluation completed");
 
         boolean suspiciousReferrer = referrerService.isSuspicious(request.getReferrerUrl());
@@ -128,6 +135,7 @@ public class RiskController {
                 .pageOriginNotFromOrg(request.getPageOriginNotFromOrg())
                 .referrerUrl(request.getReferrerUrl())
                 .suspiciousReferrer(suspiciousReferrer)
+                .flaggedIssues(flaggedIssues)
                 .build();
 
         return ResponseEntity.ok(response);

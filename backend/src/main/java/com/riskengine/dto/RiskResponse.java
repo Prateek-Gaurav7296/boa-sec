@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -25,4 +27,6 @@ public class RiskResponse {
     private String referrerUrl;
     /** True when referrer URL was not from allowed org (phishing/malware redirect). */
     private Boolean suspiciousReferrer;
+    /** List of flagged issues (malicious page, automation, etc.) detected from signals. */
+    private List<FlaggedIssue> flaggedIssues;
 }

@@ -37,6 +37,11 @@ public class SignalNormalizationService {
         int pageOriginNotFromOrg = isPageOriginNotFromOrg(request);
         int referrerNotFromOrg = referrerService.isSuspicious(request.getReferrerUrl()) ? 1 : 0;
         int rapidClicking = isRapidClicking(request.getClickIntervalAvg());
+        int functionTampered = booleanToInt(request.getFunctionTampered());
+        int iframeMismatch = booleanToInt(request.getIframeMismatch());
+        int storageBlocked = booleanToInt(request.getStorageBlocked());
+        int headlessBrowser = isHeadlessBrowser(request);
+        int webdriverScriptFn = booleanToInt(request.getHasWebdriverScriptFn());
 
         return NormalizedSignals.builder()
                 .webdriverFlag(webdriver)
@@ -48,6 +53,11 @@ public class SignalNormalizationService {
                 .pageOriginNotFromOrg(pageOriginNotFromOrg)
                 .referrerNotFromOrg(referrerNotFromOrg)
                 .rapidClicking(rapidClicking)
+                .functionTampered(functionTampered)
+                .iframeMismatch(iframeMismatch)
+                .storageBlocked(storageBlocked)
+                .headlessBrowser(headlessBrowser)
+                .webdriverScriptFn(webdriverScriptFn)
                 .build();
     }
 
@@ -93,5 +103,14 @@ public class SignalNormalizationService {
     private static int isRapidClicking(Double clickIntervalAvg) {
         if (clickIntervalAvg == null) return 0;
         return clickIntervalAvg < RAPID_CLICK_THRESHOLD_MS ? 1 : 0;
+    }
+
+    private static int isHeadlessBrowser(SignalRequest request) {
+        Integer pl = request.getPluginsLength();
+        Integer mt = request.getMimeTypesLength();
+        if (pl == null && mt == null) return 0;
+        int p = pl != null ? pl : 0;
+        int m = mt != null ? mt : 0;
+        return (p == 0 && m == 0) ? 1 : 0;
     }
 }

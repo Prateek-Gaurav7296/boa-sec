@@ -24,6 +24,15 @@
         #result h2 { font-size: 1rem; margin: 0 0 0.5rem 0; }
         #result p { margin: 0.25rem 0; font-size: 0.875rem; }
         .score { font-weight: 600; font-size: 1.25rem; }
+        .flagged-issues { margin-top: 1rem; padding: 0.75rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; }
+        .flagged-issues h3 { font-size: 0.9375rem; margin: 0 0 0.5rem 0; }
+        .issue-item { padding: 0.35rem 0; font-size: 0.8125rem; border-bottom: 1px solid #f3f4f6; }
+        .issue-item:last-child { border-bottom: none; }
+        .issue-code { font-weight: 600; color: #374151; }
+        .issue-severity-CRITICAL { color: #b91c1c; }
+        .issue-severity-HIGH { color: #dc2626; }
+        .issue-severity-MEDIUM { color: #d97706; }
+        .issue-severity-LOW { color: #6b7280; }
         .decision-ALLOW { color: #059669; }
         .decision-MFA { color: #d97706; }
         .decision-TERMINATE { color: #b91c1c; }
@@ -52,6 +61,7 @@
         <h2>Result</h2>
         <p>Risk score: <span id="riskScore" class="score">—</span></p>
         <p>Decision: <span id="decision">—</span></p>
+        <div id="flaggedIssues" class="flagged-issues" hidden></div>
         <div id="iframeBreakdown" class="iframe-breakdown" hidden></div>
         <p>Device signature: <code id="deviceSignature">—</code></p>
         <div id="securityAlert" class="security-alert" hidden></div>
@@ -100,7 +110,19 @@
         var iframeBreakdownEl = document.getElementById('iframeBreakdown');
         var securityAlertEl = document.getElementById('securityAlert');
 
+        function showFlaggedIssues(data) {
+            var el = document.getElementById('flaggedIssues');
+            var issues = data.flaggedIssues || [];
+            if (!el || issues.length === 0) { el.hidden = true; return; }
+            el.hidden = false;
+            el.innerHTML = '<h3>Flagged issues (' + issues.length + ')</h3>' + issues.map(function (i) {
+                var sev = (i.severity || 'LOW').toUpperCase();
+                return '<div class="issue-item"><span class="issue-code">' + (i.code || '') + '</span> <span class="issue-severity-' + sev + '">[' + sev + ']</span> ' + (i.description || '') + '</div>';
+            }).join('');
+        }
+
         function showAlert(data) {
+            showFlaggedIssues(data);
             var iframe = data.iframeSignals || {};
             var total = iframe.total || 0;
             var suspicious = iframe.suspicious || 0;

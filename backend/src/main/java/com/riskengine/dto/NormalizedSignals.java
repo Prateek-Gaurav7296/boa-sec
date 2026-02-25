@@ -24,4 +24,9 @@ public class NormalizedSignals {
     private int pageOriginNotFromOrg; // 0 or 1: page URL host not in org list
     private int referrerNotFromOrg;   // 0 or 1: referrer URL host not in org list (phishing/malware redirect)
     private int rapidClicking;     // 0 or 1
+    private int functionTampered;  // 0 or 1: Function.prototype tampering (devtools/automation)
+    private int iframeMismatch;    // 0 or 1: main vs iframe UA/platform mismatch
+    private int storageBlocked;    // 0 or 1: storage disabled (incognito/headless)
+    private int headlessBrowser;   // 0 or 1: pluginsLength=0 and mimeTypesLength=0
+    private int webdriverScriptFn; // 0 or 1: __webdriver_script_fn in document
 }

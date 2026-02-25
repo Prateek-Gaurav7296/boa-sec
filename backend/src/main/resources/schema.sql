@@ -15,5 +15,8 @@ CREATE TABLE IF NOT EXISTS risk_decisions (
     user_id VARCHAR(100),
     risk_score INTEGER,
     decision VARCHAR(20),
+    flagged_issues JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- For existing databases, run: ALTER TABLE risk_decisions ADD COLUMN IF NOT EXISTS flagged_issues JSONB;

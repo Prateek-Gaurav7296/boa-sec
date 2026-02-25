@@ -240,6 +240,93 @@ function testCSP() {
   }
 }
 
+function scanIframes() {
+  const result = { total: 0, suspicious: 0, hidden: 0, offscreen: 0, crossOrigin: 0, notFromOrg: 0 };
+  try {
+    const iframes = document.querySelectorAll("iframe");
+    result.total = iframes.length;
+    if (iframes.length === 0) return result;
+
+    const pageOrigin = (typeof location !== "undefined" && location.origin) ? location.origin : "";
+    const allowedHosts = (typeof window !== "undefined" && window.RiskAgentOrgHosts) ? window.RiskAgentOrgHosts : [];
+
+    function hostFromUrl(url) {
+      if (!url || typeof url !== "string") return null;
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        return a.hostname ? a.hostname.toLowerCase() : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function isHostAllowed(host) {
+      if (!host) return false;
+      host = host.toLowerCase();
+      for (let i = 0; i < allowedHosts.length; i++) {
+        if (String(allowedHosts[i]).toLowerCase() === host) return true;
+      }
+      return false;
+    }
+
+    const vw = typeof window !== "undefined" ? window.innerWidth || 0 : 0;
+    const vh = typeof window !== "undefined" ? window.innerHeight || 0 : 0;
+
+    for (let i = 0; i < iframes.length; i++) {
+      const iframe = iframes[i];
+      let hidden = false;
+      let offscreen = false;
+      let crossOrigin = false;
+      let notFromOrg = false;
+
+      try {
+        const style = window.getComputedStyle(iframe);
+        const display = (style && style.display) ? style.display : "";
+        const visibility = (style && style.visibility) ? style.visibility : "";
+        const opacity = (style && style.opacity) ? parseFloat(style.opacity) : 1;
+        const rect = iframe.getBoundingClientRect();
+        const w = rect ? rect.width : 0;
+        const h = rect ? rect.height : 0;
+        const left = rect ? rect.left : 0;
+        const top = rect ? rect.top : 0;
+
+        if (display === "none" || visibility === "hidden" || (opacity !== undefined && opacity <= 0) || (w <= 0 && h <= 0)) {
+          hidden = true;
+        }
+        if (left + w < 0 || top + h < 0 || left >= vw || top >= vh) {
+          offscreen = true;
+        }
+
+        const src = iframe.src || "";
+        if (src && pageOrigin) {
+          try {
+            const iframeOrigin = src.split("/").slice(0, 3).join("/");
+            if (iframeOrigin && iframeOrigin !== pageOrigin) {
+              crossOrigin = true;
+            }
+          } catch (e) {
+            crossOrigin = true;
+          }
+          const host = hostFromUrl(src);
+          if (host && allowedHosts.length > 0 && !isHostAllowed(host)) {
+            notFromOrg = true;
+          }
+        }
+      } catch (e) {
+        hidden = true;
+      }
+
+      if (hidden) result.hidden++;
+      if (offscreen) result.offscreen++;
+      if (crossOrigin) result.crossOrigin++;
+      if (notFromOrg) result.notFromOrg++;
+      if (hidden || offscreen || crossOrigin || notFromOrg) result.suspicious++;
+    }
+  } catch (e) {}
+  return result;
+}
+
 async function collectAllSignals() {
   const stage1 = collectFastSignals();
 
@@ -263,11 +350,14 @@ async function collectAllSignals() {
     cspRestricted: testCSP()
   };
 
+  const iframeSignals = scanIframes();
+
   return {
     timestamp: Date.now(),
     stage1,
     stage2,
-    stage3
+    stage3,
+    iframeSignals
   };
 }
 

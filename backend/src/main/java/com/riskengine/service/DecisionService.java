@@ -1,5 +1,6 @@
 package com.riskengine.service;
 
+import com.riskengine.dto.FlaggedIssue;
 import com.riskengine.dto.SignalRequest;
 import com.riskengine.entity.RawSignal;
 import com.riskengine.entity.RiskDecisionLog;
@@ -9,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -25,8 +28,11 @@ public class DecisionService {
         return "TERMINATE";
     }
 
-    public void persistRawSignals(SignalRequest request) {
-        Map<String, Object> signalJson = toSignalMap(request);
+    /**
+     * Persists raw signals. When rawPayload is provided (from /risk/collect), stores full payload for auditing.
+     */
+    public void persistRawSignals(SignalRequest request, Map<String, Object> rawPayload) {
+        Map<String, Object> signalJson = rawPayload != null ? new HashMap<>(rawPayload) : toSignalMap(request);
         RawSignal entity = RawSignal.builder()
                 .sessionId(request.getSessionId())
                 .userId(request.getUserId())
@@ -36,15 +42,30 @@ public class DecisionService {
         rawSignalRepository.save(entity);
     }
 
-    public void persistDecision(String sessionId, String userId, int riskScore, String decision) {
+    public void persistDecision(String sessionId, String userId, int riskScore, String decision,
+                                List<FlaggedIssue> flaggedIssues) {
+        List<Map<String, Object>> issuesJson = flaggedIssues != null ? toIssuesMapList(flaggedIssues) : null;
         RiskDecisionLog log = RiskDecisionLog.builder()
                 .sessionId(sessionId)
                 .userId(userId)
                 .riskScore(riskScore)
                 .decision(decision)
+                .flaggedIssues(issuesJson)
                 .createdAt(Instant.now())
                 .build();
         riskDecisionRepository.save(log);
+    }
+
+    private static List<Map<String, Object>> toIssuesMapList(List<FlaggedIssue> issues) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (FlaggedIssue i : issues) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("code", i.getCode());
+            m.put("description", i.getDescription());
+            m.put("severity", i.getSeverity());
+            list.add(m);
+        }
+        return list;
     }
 
     private static Map<String, Object> toSignalMap(SignalRequest r) {
@@ -71,6 +92,14 @@ public class DecisionService {
         m.put("screenHeight", r.getScreenHeight());
         m.put("timezone", r.getTimezone());
         m.put("clickIntervalAvg", r.getClickIntervalAvg());
+        m.put("functionTampered", r.getFunctionTampered());
+        m.put("iframeMismatch", r.getIframeMismatch());
+        m.put("storageBlocked", r.getStorageBlocked());
+        m.put("cspRestricted", r.getCspRestricted());
+        m.put("pluginsLength", r.getPluginsLength());
+        m.put("mimeTypesLength", r.getMimeTypesLength());
+        m.put("hasChrome", r.getHasChrome());
+        m.put("hasWebdriverScriptFn", r.getHasWebdriverScriptFn());
         return m;
     }
 }
